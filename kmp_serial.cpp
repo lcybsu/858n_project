@@ -23,7 +23,7 @@ kmp::~kmp() {
 void kmp::setPatternStr(const std::string& pattern) {
     _patternStr = pattern;
     _lenOfPattern = pattern.length();
-    getNextArray();
+    getNextArray2();
 }
 
 // search pattern in text
@@ -64,22 +64,47 @@ std::vector<int> kmp::searchIn(const std::string& text) {
 // get next[...] array for pattern string
 void kmp::getNextArray() {
     if(_patternStr.empty() || _lenOfPattern == 0) return;
-
+    
     _nextArray.resize(_lenOfPattern);
     _nextArray[0] = -1;
-
+    
     for(int i = 1; i < _lenOfPattern; i++) {
         int j;
         _nextArray[i] = 0;
         for(j = i - 1 ; j > 0; j--) {
             std::string str1 = _patternStr.substr(0, j);
             std::string str2 = _patternStr.substr(i-j, j);
-
+            
             if(str1 == str2) {
                 _nextArray[i] = j;
                 break;
             }
         }
+    }
+}
+
+void kmp::getNextArray2() {
+    if (_patternStr.empty() || _lenOfPattern == 0) return;
+
+    _nextArray.resize(_lenOfPattern + 1);
+    _nextArray[0] = -1;
+    _nextArray[1] = 0;
+    int j = 2;
+
+    while (j <= _lenOfPattern) {
+        int i = _nextArray[j - 1];
+        while (i != 0 && _patternStr[i] != _patternStr[j - 1]) {
+            i = _nextArray[i];
+        }
+        _nextArray[j] = i + 1;
+        if (j != _lenOfPattern) {
+            if (_patternStr[j] != _patternStr[i + 1]) {
+                _nextArray[j] = i + 1;
+            } else {
+                _nextArray[j] = _nextArray[i + 1];
+            }
+        }
+        j = j + 1;
     }
 }
 

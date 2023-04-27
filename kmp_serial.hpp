@@ -23,6 +23,7 @@ public:
     
 protected:
     void getNextArray();
+    void getNextArray2();
     std::string _patternStr;    // pattern string
     int   _lenOfPattern;        // length of pattern string
     std::vector<int> _nextArray; // next array for pattern string
