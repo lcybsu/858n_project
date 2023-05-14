@@ -1,0 +1,174 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <mpi.h>
+#include <chrono>
+#include <numeric>
+#include <fstream>
+#include <sstream>
+
+// Step 1
+std::vector<int> find_first_char(const std::string &main_text, const std::string &pattern) {
+    int N = main_text.length();
+    int M = pattern.length();
+    std::vector<int> X;
+
+    for (int i = 0; i <= N - M; i++) {
+        if (main_text[i] == pattern[0]) {
+            X.push_back(i);
+        }
+    }
+
+    return X;
+}
+
+// Step 3.1
+void update_Y(const std::string &main_text, const std::string &pattern, int num_round, std::vector<int> &X, std::vector<int> &Y) {
+    for (int i = 0; i < X.size(); i++) {
+        if (Y[i] == 1 && main_text[X[i] + num_round] != pattern[num_round]) {
+            Y[i] = 0;
+        }
+        std::cout << "Y[i] " << Y[i]<< std::endl;
+    }
+}
+
+std::vector<int> process_segments(const std::string &main_text, const std::string &pattern, const std::vector<int> &X, const std::vector<int> &Y, int num_processors, int rank, int size) {
+    int N = main_text.length();
+    int M = pattern.length();
+    int t = std::accumulate(Y.begin(), Y.end(), 0);
+    int seg_per_processor = std::ceil(static_cast<float>(t) / num_processors);
+    std::vector<int> marked_positions(N, 0);
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    int begin = rank * seg_per_processor;
+    std::cout << "begin: " << begin << std::endl;
+    int end = std::min((rank + 1) * seg_per_processor, static_cast<int>(X.size()));
+
+    for (int i = begin; i < end; i++) {
+        if (Y[i] == 1) {
+            std::cout << "rank: " << rank << " i "<<i<<std::endl;
+            bool match = true;
+            for (int j = 0; j < M; j++) {
+                if (main_text[X[i] + j] != pattern[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                marked_positions[X[i]] = 1;
+            }
+        }
+    }
+
+    // Gather results from all processes
+    std::vector<int> global_marked_positions(N, 0);
+    MPI_Allreduce(marked_positions.data(), global_marked_positions.data(), N, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    return global_marked_positions;
+}
+
+int find_pattern(const std::string &main_text, const std::string &pattern, const int num_processors,  int rank, int size) {
+    int count;
+    int M = pattern.length();
+
+    if (M == 1) {
+        for (size_t i = 0; i < main_text.length(); i++) {
+            if (main_text[i] == pattern[0]) {
+                std::cout << "Pattern found at index: " << i << std::endl;
+            }
+        }
+        return 0 ;
+    }
+
+    int num_round = 0;
+    std::vector<int> X = find_first_char(main_text, pattern);
+    std::vector<int> Y(X.size(), 1);
+
+    if (X.size() == 1) {
+        std::cout << "Pattern found at index: " << X[0] << std::endl;
+        return 0;
+    }
+
+    while (true) {
+        int t = accumulate(Y.begin(), Y.end(), 0);
+        
+        if (t > num_processors) {
+            num_round++;
+            update_Y(main_text, pattern, num_round, X, Y);
+            std::cout << "Y updated " << num_round <<" times"<< std::endl;
+        } else {
+            std::vector<int> marked_positions = process_segments(main_text, pattern, X, Y, num_processors,  rank, size);
+
+            for (int i = 0; i < main_text.length(); i++) {
+                if (marked_positions[i] == 1) {
+//                    std::cout << "Pattern found at index: " << i << std::endl;
+                    count += 1;
+                                    }
+                                }
+                                break;
+                }
+            }
+    return count;
+    }
+
+void printCharWithIndex(const std::string& input) {
+    for (size_t i = 0; i < input.length(); ++i) {
+        std::cout << "Character: " << input[i] << " Index: " << i << std::endl;
+    }
+}
+
+int main(int argc, char *argv[]) {
+    MPI_Init(&argc, &argv);
+
+    int rank;
+    int size;
+    
+
+    std::string file_name = "/Users/cnl29/Desktop/kmp/kmp/kmp/datasets/kjv10.txt"; // Replace with the name of your text file
+    std::ifstream file(file_name);
+    std::string main_text;
+
+    if (file.is_open()) {
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        main_text = buffer.str();
+        file.close();
+    } else {
+        std::cerr << "Unable to open the file: " << file_name << std::endl;
+        return 1;
+    }
+
+    std::string pattern = "world";
+    int num_processors = size;
+    
+    printCharWithIndex(main_text);
+    
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    std::cerr << "hello rank: " << rank << std::endl;
+
+    if (rank == 0) {
+        // Record the start time
+        auto start = std::chrono::high_resolution_clock::now();
+
+        int count = find_pattern(main_text, pattern, num_processors, rank, size);
+
+        // Record the end time and calculate the duration
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "matching count " << count << std::endl;
+
+        std::cout << "Elapsed time: " << elapsed.count() << " seconds" << std::endl;
+    } else {
+        find_pattern(main_text, pattern, num_processors, rank, size);
+    }
+
+    MPI_Finalize();
+
+    return 0;
+    
+}
