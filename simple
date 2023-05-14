@@ -1,0 +1,135 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <iostream>
+// working as naive parallel version
+
+void get_next(const char *t, int *next) {
+    int i = 0, j = -1;
+    int tlen = strlen(t);
+
+    next[0] = -1;
+
+    while (i < tlen) {
+        if (j == -1 || t[i] == t[j]) {
+            i++;
+            j++;
+            next[i] = (t[i] == t[j]) ? -1 : j;
+        } else {
+            j = next[j];
+        }
+    }
+}
+
+int kmp_match(const char *s, const char *t, int start, int end) {
+    int count=0;
+    int i, j, slen, tlen;
+    slen = end - start + 1;
+    tlen = strlen(t);
+    int *next = (int *)malloc((tlen + 1) * sizeof(int));
+
+    get_next(t, next);
+
+    i = start;
+    j = 0;
+
+    while (i < end) {
+        if (j == -1 || s[i] == t[j]) {
+            i++;
+            j++;
+            if (j == tlen) {
+                count+=1;
+//                printf("Pattern found at index: %d\n", i - j);
+                j = next[j];
+            }
+        } else {
+            j = next[j];
+        }
+    }
+
+    free(next);
+    return count;
+}
+
+char *read_file(const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *buffer = (char *)malloc(length + 1);
+    if (buffer == NULL) {
+        perror("Error allocating memory");
+        fclose(file);
+        return NULL;
+    }
+
+    if (fread(buffer, 1, length, file) != length) {
+        perror("Error reading file");
+        fclose(file);
+        free(buffer);
+        return NULL;
+    }
+
+    fclose(file);
+    buffer[length] = '\0';
+
+    return buffer;
+}
+
+
+
+int main(int argc, char *argv[]) {
+    int size, myid;
+    char *T = read_file("/Users/cnl29/Desktop/kmp/kmp/kmp/datasets/kjv10.txt");
+        if (!T) {
+            return 1;
+        }
+    const char *P = "world";
+    int n, m, plen, tlen;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+
+    plen = strlen(P);
+    tlen = strlen(T);
+
+    m = plen - 1;
+//    n = (tlen + size - 1) / size;
+
+    int start = myid * n;
+    int end = (myid + 1) * n - 1;
+
+    if (myid == size - 1) {
+        end = tlen - 1;
+    }
+
+    double start_time = MPI_Wtime();
+    int count = kmp_match(T, P, start, end);
+    MPI_Barrier(MPI_COMM_WORLD);
+    double end_time = MPI_Wtime();
+
+
+    if (myid == 0) {
+        printf("Pattern matching took %f seconds\n", end_time - start_time);
+    }
+    
+    std::cout << "Matched number: ";
+   //        for (int pos : match_positions) {
+           std::cout << count<< std::endl;
+   //        }
+           std::cout << std::endl;
+
+    MPI_Finalize();
+    
+    
+
+    return 0;
+}
