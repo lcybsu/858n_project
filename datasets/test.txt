@@ -1,0 +1,1 @@
+The visual appearance of fractions will change depending on whether they appear inline.
